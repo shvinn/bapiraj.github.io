@@ -1,0 +1,133 @@
+---
+title: "One-Hot Encoding: Predict Streaming Revenue"
+description: "Part 4 of the ML Regression Lab. Handle a multi-category feature the right way — one-hot encode subscription tiers and predict a streaming user's monthly revenue."
+heroImage: "/images/logreg-hero.svg"
+taxonomy:
+  category: machine-learning
+  subcategory: classical-ml
+  series: ml-regression-lab
+tags: ["linear-regression", "one-hot-encoding", "scikit-learn", "python", "streamlit"]
+difficulty: intermediate
+type: tutorial
+authorId: shvinn
+publishedAt: "2026-01-31"
+featured: false
+repoUrl: "https://github.com/shvinn/ai-lab-99/tree/main/04_movie_streaming_revenue_prediction"
+related: ["binary-encoding-insurance", "polynomial-regression-marketing"]
+---
+
+[Part 3](/article/binary-encoding-insurance) encoded a two-value feature. But a
+**subscription plan** has three values — Basic, Standard, Premium. Mapping them to
+`1, 2, 3` would lie to the model: it would assume Premium is "3× more" than Basic
+and that the gaps are equal. **Part 4** fixes this with **one-hot encoding**.
+
+> **Follow along:** `04_movie_streaming_revenue_prediction` in
+> [github.com/shvinn/ai-lab-99](https://github.com/shvinn/ai-lab-99).
+
+## The goal
+
+Predict a user's monthly revenue from their weekly watch time, average session
+length, and subscription plan.
+
+## Step 1 — See the categories
+
+```python
+import pandas as pd
+
+df = pd.read_csv("movie_streaming_data.csv")
+df["subscription_plan"].value_counts()
+```
+
+## Step 2 — One-hot encode the plan
+
+One-hot encoding gives **each category its own 0/1 column**, so no false ordering
+is implied. `pandas.get_dummies` does it; `.astype(int)` turns the booleans into
+clean `1`/`0` values.
+
+```python
+subscription_one_hot = pd.get_dummies(
+    df["subscription_plan"], prefix="subscription"
+).astype(int)
+
+df = pd.concat([df, subscription_one_hot], axis=1)
+subscription_one_hot.head()
+```
+
+This produces three columns: `subscription_Basic`, `subscription_Standard`,
+`subscription_Premium` — exactly one is `1` for each row.
+
+## Step 3 — Train
+
+```python
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+
+X = df[[
+    "time_spent_hours_per_week",
+    "avg_watch_duration_minutes",
+    "subscription_Basic",
+    "subscription_Standard",
+    "subscription_Premium",
+]]
+y = df["monthly_revenue_usd"]
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)
+
+model = LinearRegression()
+model.fit(X_train, y_train)
+```
+
+## Step 4 — Interpret
+
+```python
+model.coef_        # → [4.10, 1.51, -5.48, 0.79, 4.69]
+model.intercept_   # → 18.06
+```
+
+Each plan column now carries its own learned effect — Premium contributes far more
+to revenue than Basic, and the model learned that *directly from data* without any
+assumed ranking.
+
+## Step 5 — Evaluate
+
+```python
+from sklearn.metrics import mean_squared_error
+
+rmse_test = mean_squared_error(y_test, model.predict(X_test)) ** 0.5
+print(f"RMSE Test: {rmse_test:.2f}")
+```
+
+## Step 6 — Deploy
+
+Rebuild the same one-hot columns from the user's single dropdown choice:
+
+```python title="app.py"
+import streamlit as st
+
+
+def predict_monthly_revenue(weekly_time, avg_duration, basic, standard, premium):
+    return (4.10199046 * weekly_time + 1.51112169 * avg_duration
+            - 5.48127685 * basic + 0.79409922 * standard
+            + 4.68717763 * premium + 18.064934735340273)
+
+
+st.title("📺 Streaming Revenue Predictor")
+weekly_time = st.number_input("Weekly Time Spent (hours)", 0.0, step=0.5, value=10.0)
+avg_duration = st.number_input("Avg Watch Duration (minutes)", 0.0, step=1.0, value=45.0)
+plan = st.selectbox("Subscription Plan", ["Basic", "Standard", "Premium"])
+
+if st.button("Predict Revenue"):
+    revenue = predict_monthly_revenue(
+        weekly_time, avg_duration,
+        int(plan == "Basic"), int(plan == "Standard"), int(plan == "Premium"),
+    )
+    st.success(f"💰 Estimated Monthly Revenue: ${revenue:.2f}")
+```
+
+## What's next
+
+Everything so far assumed a straight-line relationship. In the
+[final part](/article/polynomial-regression-marketing) we bend the line — fitting
+curves with **polynomial regression** while still using `LinearRegression`.

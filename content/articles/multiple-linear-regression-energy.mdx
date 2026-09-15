@@ -1,0 +1,117 @@
+---
+title: "Multiple Linear Regression: Predict Energy Consumption"
+description: "Part 2 of the ML Regression Lab. Extend regression to several features — predict energy use from temperature and humidity — and learn to read multi-feature coefficients."
+heroImage: "/images/logreg-hero.svg"
+taxonomy:
+  category: machine-learning
+  subcategory: classical-ml
+  series: ml-regression-lab
+tags: ["linear-regression", "scikit-learn", "regression", "python", "streamlit"]
+difficulty: beginner
+type: tutorial
+authorId: shvinn
+publishedAt: "2026-01-17"
+featured: false
+repoUrl: "https://github.com/shvinn/ai-lab-99/tree/main/02_energy_consumption_prediction"
+related: ["simple-linear-regression-housing", "binary-encoding-insurance"]
+---
+
+In [Part 1](/article/simple-linear-regression-housing) one feature gave us a line.
+Real problems depend on many inputs. **Part 2** generalizes to **multiple linear
+regression**: predicting energy consumption from both temperature and humidity.
+
+> **Follow along:** `02_energy_consumption_prediction` in
+> [github.com/shvinn/ai-lab-99](https://github.com/shvinn/ai-lab-99).
+
+## The goal
+
+With two features the model fits a *plane* instead of a line:
+
+$$
+\text{energy} = w_1 \cdot \text{temp} + w_2 \cdot \text{humidity} + b
+$$
+
+The workflow is identical to Part 1 — only the shape of `X` changes. That's the
+point: scikit-learn's API doesn't care how many features you have.
+
+## Step 1 — Load the data
+
+```python
+import pandas as pd
+
+df = pd.read_csv("energy_consumption_data.csv")
+df.head()
+df.describe()
+```
+
+## Step 2 — Train on two features
+
+The only difference from Part 1: `X` now has two columns.
+
+```python
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+
+X = df[["temperature", "humidity"]]   # two features → matrix with 2 columns
+y = df["energy_consumption"]
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)
+
+model = LinearRegression()
+model.fit(X_train, y_train)
+```
+
+## Step 3 — Interpret the coefficients
+
+Now there's one coefficient **per feature**. Each is the effect of that feature
+*holding the others fixed*:
+
+```python
+model.coef_        # → [3.41, 2.00]  per-°C and per-% effects
+model.intercept_   # → 53.02
+```
+
+Reading it: every +1 °C adds ~**3.41 kWh**, every +1% humidity adds ~**2.00 kWh**.
+Because features can be on different scales, raw coefficient size isn't the same
+as importance — keep that in mind as models grow.
+
+## Step 4 — Evaluate
+
+```python
+from sklearn.metrics import mean_squared_error
+
+rmse_train = mean_squared_error(y_train, model.predict(X_train)) ** 0.5
+rmse_test = mean_squared_error(y_test, model.predict(X_test)) ** 0.5
+print(f"RMSE Train: {rmse_train:.2f}  |  RMSE Test: {rmse_test:.2f}")
+```
+
+## Step 5 — Deploy
+
+```python title="app.py"
+import streamlit as st
+
+
+def predict_energy_consumption(temperature, humidity):
+    return 3.40772114 * temperature + 2.00133069 * humidity + 53.02343025491177
+
+
+st.title("⚡ Predict Energy Consumption")
+temperature = st.number_input("Temperature (°C)", -50.0, 60.0, 25.0, 0.1)
+humidity = st.number_input("Humidity (%)", 0.0, 100.0, 50.0, 0.1)
+
+if st.button("Predict"):
+    prediction = predict_energy_consumption(temperature, humidity)
+    st.success(f"🔋 Predicted Energy Consumption: {prediction:.2f} kWh")
+```
+
+```bash
+streamlit run app.py
+```
+
+## What's next
+
+So far every feature was already numeric. In
+[Part 3](/article/binary-encoding-insurance) we hit our first **categorical**
+feature and learn the simplest fix: binary encoding.

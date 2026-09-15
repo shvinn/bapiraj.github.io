@@ -1,0 +1,151 @@
+---
+title: "Simple Linear Regression: Predict Housing Prices"
+description: "Part 1 of the ML Regression Lab. Build, evaluate, and deploy a one-feature linear regression model that predicts house prices from area — the full workflow, end to end."
+heroImage: "/images/logreg-hero.svg"
+taxonomy:
+  category: machine-learning
+  subcategory: classical-ml
+  series: ml-regression-lab
+tags: ["linear-regression", "scikit-learn", "regression", "python", "streamlit"]
+difficulty: beginner
+type: tutorial
+authorId: shvinn
+publishedAt: "2026-01-10"
+featured: false
+repoUrl: "https://github.com/shvinn/ai-lab-99/tree/main/01_housing_price_prediction"
+related: ["multiple-linear-regression-energy", "logistic-regression-playground"]
+---
+
+This is **Part 1** of the ML Regression Lab — a five-project tour of regression
+where every model ends as a deployable app. We start with the simplest model that
+teaches the entire machine-learning workflow: **simple linear regression** with a
+single feature.
+
+> **Follow along:** this is `01_housing_price_prediction` in
+> [github.com/shvinn/ai-lab-99](https://github.com/shvinn/ai-lab-99). Open the
+> notebook to run it cell by cell, or hand this article to a coding agent to
+> reproduce the project from scratch.
+
+## The goal
+
+Predict a house's price from one feature — its area in square feet. The model
+learns a straight line:
+
+$$
+\text{price} = w \cdot \text{area} + b
+$$
+
+## Step 1 — Setup
+
+```text title="requirements.txt"
+jupyter
+pandas
+matplotlib
+scikit-learn
+streamlit
+```
+
+```bash
+pip install -r requirements.txt
+```
+
+## Step 2 — Load and explore the data
+
+```python
+import pandas as pd
+
+df = pd.read_csv("housing_data.csv")
+df.head()
+df.describe()
+```
+
+Always *look* at the data before modeling. A scatter plot tells you whether a
+straight line is even a reasonable hypothesis:
+
+```python
+import matplotlib.pyplot as plt
+
+plt.scatter(df["area_in_sqft"], df["price_in_dollars"], alpha=0.7)
+plt.xlabel("Area (sqft)")
+plt.ylabel("Price ($)")
+plt.show()
+```
+
+## Step 3 — Train the model
+
+Separate the feature matrix `X` from the target `y`, then hold out 20% of the
+data so we can evaluate on examples the model never saw.
+
+```python
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+
+X = df[["area_in_sqft"]]      # 2D: scikit-learn expects a matrix of features
+y = df["price_in_dollars"]    # 1D: the target
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)
+
+model = LinearRegression()
+model.fit(X_train, y_train)
+```
+
+## Step 4 — Interpret what it learned
+
+Linear models are wonderfully transparent — the learned parameters *are* the
+explanation:
+
+```python
+model.coef_        # → [670.33]  the slope w: $ per extra sqft
+model.intercept_   # → 122632.82 the intercept b: price at area 0
+```
+
+So each additional square foot adds about **$670** to the predicted price.
+
+## Step 5 — Evaluate
+
+RMSE puts the error back in the target's units (dollars). Comparing train vs.
+test RMSE tells you whether the model generalizes or is overfitting.
+
+```python
+from sklearn.metrics import mean_squared_error
+
+rmse_train = mean_squared_error(y_train, model.predict(X_train)) ** 0.5
+rmse_test = mean_squared_error(y_test, model.predict(X_test)) ** 0.5
+print(f"RMSE Train: {rmse_train:.2f}")
+print(f"RMSE Test:  {rmse_test:.2f}")
+```
+
+## Step 6 — Deploy as a Streamlit app
+
+Once trained, the whole model is just two numbers. Freeze them into a tiny app so
+anyone can get predictions:
+
+```python title="app.py"
+import streamlit as st
+
+
+def predict_housing_price(area):
+    return 670.33282313 * area + 122632.82090315572
+
+
+st.title("🏡 Housing Price Prediction")
+area = st.number_input("Area (sqft):", min_value=0.0, step=10.0)
+
+if st.button("Submit"):
+    if area <= 0:
+        st.error("Please enter a valid area.")
+    else:
+        st.success(f"Estimated Price: ${predict_housing_price(area):,.2f}")
+```
+
+```bash
+streamlit run app.py
+```
+
+## What's next
+
+You've run the complete loop: load → explore → train → interpret → evaluate →
+deploy. In [Part 2](/article/multiple-linear-regression-energy) we add a second
+feature and move from a line to a plane with **multiple linear regression**.

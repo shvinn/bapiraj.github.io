@@ -1,0 +1,79 @@
+---
+title: "What Is the Model Context Protocol?"
+description: "MCP is the USB-C of AI applications — a single open protocol that lets any model talk to any tool or data source. Here's the mental model."
+heroImage: "/images/mcp-hero.svg"
+taxonomy:
+  category: artificial-intelligence
+  subcategory: mcp
+  series: mcp-series
+tags: ["mcp", "agents", "tools", "protocol"]
+difficulty: beginner
+type: guide
+authorId: shvinn
+publishedAt: "2026-05-02"
+updatedAt: "2026-05-20"
+featured: true
+repoUrl: "https://github.com/shvinn/mcp-playbook"
+related: ["build-an-mcp-server", "rag-from-scratch"]
+citations:
+  - title: "Introducing the Model Context Protocol"
+    authors: "Anthropic"
+    year: 2024
+    url: "https://www.anthropic.com/news/model-context-protocol"
+    venue: "Anthropic"
+---
+
+The **Model Context Protocol (MCP)** is an open standard for connecting AI
+applications to the systems where data and capabilities live. Before MCP, every
+integration between a model and a tool was bespoke. MCP replaces that N×M
+explosion with a single, well-specified interface.
+
+## Why a protocol at all?
+
+Think of how messy device connectivity was before USB. Each peripheral shipped
+its own port and driver. USB collapsed that into one contract. MCP does the same
+for AI: a model speaks MCP, a tool speaks MCP, and they interoperate.
+
+```mermaid
+graph LR
+  A[AI App / Host] -->|MCP| B(MCP Client)
+  B -->|JSON-RPC| C[MCP Server: Files]
+  B -->|JSON-RPC| D[MCP Server: Database]
+  B -->|JSON-RPC| E[MCP Server: Web]
+```
+
+## The three primitives
+
+MCP servers expose capabilities through three primitives:
+
+- **Tools** — functions the model can call (with typed inputs/outputs).
+- **Resources** — readable data the model can pull into context.
+- **Prompts** — reusable, parameterized prompt templates.
+
+```python title="A minimal tool definition (FastMCP)"
+from mcp.server.fastmcp import FastMCP
+
+mcp = FastMCP("weather")
+
+
+@mcp.tool()
+def get_weather(city: str) -> dict:
+    """Get the current weather for a city."""
+    return fetch_weather(city)
+```
+
+The type hint becomes the tool's input schema and the docstring becomes the
+description the model reads — that's the entire contract.
+
+## Where it fits in an agent
+
+An agent loop calls the model, the model requests a tool, the host routes that
+request over MCP to the right server, and the result flows back into context.
+Because the transport is standardized, you can add a new capability without
+touching the agent's core logic.
+
+> The win isn't any single tool — it's that the *marginal cost* of adding the
+> next tool drops to near zero.
+
+In the [next article](/article/build-an-mcp-server) we build a working MCP
+server from scratch.

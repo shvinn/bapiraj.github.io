@@ -1,0 +1,119 @@
+---
+title: "Binary Encoding: Predict Auto Insurance Premiums"
+description: "Part 3 of the ML Regression Lab. Models only understand numbers — learn to convert a yes/no feature into 1/0 with binary encoding, then predict insurance premiums."
+heroImage: "/images/logreg-hero.svg"
+taxonomy:
+  category: machine-learning
+  subcategory: classical-ml
+  series: ml-regression-lab
+tags: ["linear-regression", "feature-encoding", "scikit-learn", "python", "streamlit"]
+difficulty: beginner
+type: tutorial
+authorId: shvinn
+publishedAt: "2026-01-24"
+featured: false
+repoUrl: "https://github.com/shvinn/ai-lab-99/tree/main/03_auto_insurance_premium_prediction"
+related: ["multiple-linear-regression-energy", "one-hot-encoding-streaming"]
+---
+
+Linear models do arithmetic — they can't multiply a weight by the word `"yes"`.
+**Part 3** introduces **feature encoding**: the step that turns categorical data
+into numbers a model can use. We start with the simplest case, a two-value
+(binary) feature.
+
+> **Follow along:** `03_auto_insurance_premium_prediction` in
+> [github.com/shvinn/ai-lab-99](https://github.com/shvinn/ai-lab-99).
+
+## The goal
+
+Predict an annual insurance premium from a driver's **age** (numeric) and whether
+they **caused an accident in the past two years** (yes/no).
+
+## Step 1 — Inspect the categorical column
+
+```python
+import pandas as pd
+
+df = pd.read_csv("auto_insurance_data.csv")
+df["caused_an_accidient_in_past_two_years"].value_counts()
+```
+
+## Step 2 — Binary-encode yes/no → 1/0
+
+A single column with exactly two categories maps cleanly to `1`/`0`. `pandas`
+`.map()` does it in one line:
+
+```python
+df["caused_an_accidient_in_past_two_years"] = (
+    df["caused_an_accidient_in_past_two_years"].map({"yes": 1, "no": 0})
+)
+```
+
+Now both features are numeric and the column is ready for the model.
+
+## Step 3 — Train
+
+```python
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+
+X = df[["age", "caused_an_accidient_in_past_two_years"]]
+y = df["annual_premium_usd"]
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)
+
+model = LinearRegression()
+model.fit(X_train, y_train)
+```
+
+## Step 4 — Interpret
+
+```python
+model.coef_        # → [-9.95, 499.19]
+model.intercept_   # → 1997.92
+```
+
+The encoded feature's coefficient has a clean reading: having caused an accident
+(`1` instead of `0`) adds about **$499** to the predicted premium. Each extra year
+of age subtracts ~$10. **This interpretability is exactly why the encoding
+matters** — the number means something.
+
+## Step 5 — Evaluate
+
+```python
+from sklearn.metrics import mean_squared_error
+
+rmse_test = mean_squared_error(y_test, model.predict(X_test)) ** 0.5
+print(f"RMSE Test: {rmse_test:.2f}")
+```
+
+## Step 6 — Deploy
+
+The app collects the raw yes/no choice and applies the *same* encoding before
+prediction — your serving code must mirror your training preprocessing exactly.
+
+```python title="app.py"
+import streamlit as st
+
+
+def predict_auto_insurance_premium(age, accident_history):
+    return -9.95088805 * age + 499.18950284 * accident_history + 1997.9182518985917
+
+
+st.title("🚗 Auto Insurance Premium Predictor")
+age = st.number_input("Driver Age", 16, 100, 30, 1)
+accident_option = st.selectbox("Accident in the past 2 years?", ["yes", "no"])
+accident_history = 1 if accident_option == "yes" else 0   # same map as training
+
+if st.button("Predict Premium"):
+    premium = predict_auto_insurance_premium(age, accident_history)
+    st.success(f"💵 Estimated Annual Premium: ${premium:.2f}")
+```
+
+## What's next
+
+Binary encoding works for two categories. But what about three or more, like a
+subscription tier? Using `1, 2, 3` would falsely imply an ordering.
+[Part 4](/article/one-hot-encoding-streaming) solves it with **one-hot encoding**.

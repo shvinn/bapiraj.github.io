@@ -1,0 +1,57 @@
+---
+title: "Prompting Foundations for Reliable Systems"
+description: "Move past prompt 'tricks' to the durable principles that make LLM-powered systems predictable: structure, constraints, and evaluation."
+heroImage: "/images/prompting-hero.svg"
+taxonomy:
+  category: large-language-models
+  subcategory: llm-engineering
+  series: llm-engineering-basics
+tags: ["prompting", "llm", "evals", "engineering"]
+difficulty: beginner
+type: guide
+authorId: shvinn
+publishedAt: "2026-03-28"
+featured: false
+related: ["rag-from-scratch"]
+---
+
+Prompting at production scale isn't about clever phrasing — it's about **reducing
+variance**. The goal is a prompt that behaves the same way across thousands of
+inputs.
+
+## Structure beats prose
+
+Give the model a clear contract: role, task, constraints, and an explicit output
+format.
+
+```text title="A structured prompt skeleton"
+You are a {role}.
+Task: {task}
+Constraints:
+- {constraint_1}
+- {constraint_2}
+Output: respond with valid JSON matching {schema}.
+```
+
+## Make outputs machine-checkable
+
+If you can validate the output programmatically, you can build an eval. If you
+can build an eval, you can improve systematically.
+
+```python
+from typing import Literal
+from pydantic import BaseModel
+
+
+class Result(BaseModel):
+    sentiment: Literal["pos", "neg", "neu"]
+    score: float
+
+
+parsed = Result.model_validate_json(model_output)
+```
+
+## Evaluate, then iterate
+
+Keep a fixed test set of inputs with expected behaviors. Change one variable at a
+time and measure. Prompt engineering without evals is guessing.

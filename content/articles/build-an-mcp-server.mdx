@@ -1,0 +1,208 @@
+---
+title: "Build an MCP Server From Scratch in Python"
+description: "A hands-on tutorial: build a Model Context Protocol server with FastMCP that gives any AI client full CRUD over a todo list backed by a CSV file — then connect it to Claude."
+heroImage: "/images/mcp-build-hero.svg"
+taxonomy:
+  category: artificial-intelligence
+  subcategory: mcp
+  series: mcp-series
+tags: ["mcp", "fastmcp", "python", "agents", "tools"]
+difficulty: intermediate
+type: tutorial
+authorId: shvinn
+publishedAt: "2026-05-10"
+updatedAt: "2026-06-14"
+featured: false
+repoUrl: "https://github.com/shvinn/mcp-playbook"
+related: ["what-is-mcp"]
+---
+
+In [the previous article](/article/what-is-mcp) we covered *why* MCP exists. Now
+we build a real, working server: one that exposes four tools an AI client can use
+to manage a todo list persisted to a CSV file.
+
+> **Follow along:** this is the `01-todo-mcp-server` from
+> [github.com/shvinn/mcp-playbook](https://github.com/shvinn/mcp-playbook). Clone
+> it to run it as-is, or paste this tutorial to a coding agent and have it build
+> the same server step by step.
+
+## What you'll build
+
+A FastMCP server exposing CRUD tools over `data/todos.csv`:
+
+| Tool | Description |
+|---|---|
+| `add_todo` | Add a new todo (starts as `not_started`) |
+| `get_todos` | List todos, optionally filtered by status |
+| `update_todo` | Update a todo's name and/or status |
+| `delete_todo` | Delete a todo by ID |
+
+Statuses: `not_started`, `in_progress`, `completed`.
+
+## Step 1 — Project setup
+
+```bash title="terminal"
+mkdir 01-todo-mcp-server && cd 01-todo-mcp-server
+mkdir data
+echo "id,name,status" > data/todos.csv      # header row only
+```
+
+```text title="requirements.txt"
+mcp
+pandas
+```
+
+```bash
+pip install -r requirements.txt
+```
+
+## Step 2 — Initialize the server
+
+[FastMCP](https://github.com/jlowin/fastmcp) is the high-level Python API for
+MCP. You create one server object and register tools with a decorator.
+
+```python title="server.py"
+import pandas as pd
+from pathlib import Path
+from mcp.server.fastmcp import FastMCP
+
+DATA_DIR = Path(__file__).parent / "data"
+CSV_FILE = DATA_DIR / "todos.csv"
+VALID_STATUSES = {"not_started", "in_progress", "completed"}
+
+mcp = FastMCP("Todo List Server")
+```
+
+## Step 3 — Storage helpers
+
+Keeping persistence in small helpers means each tool stays focused on its job.
+
+```python title="server.py (continued)"
+def load_dataframe() -> pd.DataFrame:
+    """Read all todos from the CSV file."""
+    return pd.read_csv(CSV_FILE)
+
+
+def save_dataframe(df: pd.DataFrame) -> None:
+    """Write the DataFrame back to the CSV file."""
+    df.to_csv(CSV_FILE, index=False)
+
+
+def validate_status(status: str) -> None:
+    if status not in VALID_STATUSES:
+        raise ValueError(f"Invalid status: '{status}'. Must be one of {VALID_STATUSES}")
+```
+
+## Step 4 — Define the tools
+
+Each `@mcp.tool()` function becomes callable by the AI client. Two details do the
+heavy lifting:
+
+- **Type hints** (`name: str`, `id: int`) become the tool's input schema, so the
+  client knows exactly what arguments to send.
+- **The docstring** becomes the tool description the model reads to decide *when*
+  to call it. Write it for the model.
+
+```python title="server.py — add & list"
+@mcp.tool()
+def add_todo(name: str) -> dict:
+    """Add a new todo to the list. Returns the created todo with its new ID."""
+    if not name or not name.strip():
+        raise ValueError("Todo name cannot be empty")
+
+    df = load_dataframe()
+    new_id = int(df["id"].max() + 1) if len(df) > 0 else 1
+    new_row = pd.DataFrame([{"id": new_id, "name": name.strip(), "status": "not_started"}])
+    df = pd.concat([df, new_row], ignore_index=True)
+    save_dataframe(df)
+    return {"id": new_id, "name": name.strip(), "status": "not_started"}
+
+
+@mcp.tool()
+def get_todos(status: str | None = None) -> dict:
+    """List all todos, optionally filtered by status
+    ("not_started", "in_progress", "completed")."""
+    if status is not None:
+        validate_status(status)
+    df = load_dataframe()
+    if status:
+        df = df[df["status"] == status]
+    todos = df.to_dict(orient="records")
+    return {"todos": todos, "count": len(todos)}
+```
+
+```python title="server.py — update & delete"
+@mcp.tool()
+def update_todo(id: int, name: str | None = None, status: str | None = None) -> dict:
+    """Update a todo's name and/or status by ID. Returns the updated todo."""
+    if name is not None and not name.strip():
+        raise ValueError("Todo name cannot be empty")
+    if status is not None:
+        validate_status(status)
+
+    df = load_dataframe()
+    mask = df["id"] == id
+    if not mask.any():
+        raise ValueError(f"Todo with ID {id} not found")
+
+    if name is not None:
+        df.loc[mask, "name"] = name.strip()
+    if status is not None:
+        df.loc[mask, "status"] = status
+    save_dataframe(df)
+    return df[mask].to_dict(orient="records")[0]
+
+
+@mcp.tool()
+def delete_todo(id: int) -> dict:
+    """Delete a todo by ID."""
+    df = load_dataframe()
+    mask = df["id"] == id
+    if not mask.any():
+        raise ValueError(f"Todo with ID {id} not found")
+    save_dataframe(df[~mask])
+    return {"deleted": True, "id": id}
+```
+
+## Step 5 — Run it
+
+```python title="server.py — entry point"
+if __name__ == "__main__":
+    mcp.run()
+```
+
+```bash
+python server.py
+```
+
+The server now speaks MCP over stdio, waiting for a client to connect.
+
+## Step 6 — Connect it to Claude
+
+Register the server in your MCP client's config (here, Claude Desktop):
+
+```json title="claude_desktop_config.json"
+{
+  "mcpServers": {
+    "todos": {
+      "command": "python",
+      "args": ["/absolute/path/to/01-todo-mcp-server/server.py"]
+    }
+  }
+}
+```
+
+Restart the client and ask: *"Add a todo to write the launch post, then mark it
+in progress."* The model will call `add_todo` then `update_todo`, and the changes
+land in `data/todos.csv`.
+
+## Why this design scales
+
+Notice what we **didn't** write: no client-side glue, no custom transport, no API
+contract. Type hints and docstrings were enough for any MCP client to discover
+and use the tools. Adding a fifth tool is one more decorated function — the
+marginal cost of the next capability is near zero.
+
+For a larger example backed by SQLite (a recruiting platform with auth, roles,
+and relational queries), see `02-job-platform-database-mcp` in the same repo:
+[github.com/shvinn/mcp-playbook](https://github.com/shvinn/mcp-playbook).

@@ -1,0 +1,53 @@
+---
+title: "Logistic Regression, Interactively"
+description: "Build intuition for logistic regression by training one live in your browser — adjust the learning rate, watch the decision boundary move, no backend required."
+heroImage: "/images/logreg-hero.svg"
+taxonomy:
+  category: machine-learning
+  subcategory: classical-ml
+tags: ["logistic-regression", "classification", "interactive", "classical-ml"]
+difficulty: beginner
+type: playground
+authorId: shvinn
+publishedAt: "2026-06-01"
+featured: true
+related: ["attention-is-all-you-need-summary"]
+playground:
+  kind: logistic-regression
+  params:
+    defaultLearningRate: 0.5
+    defaultEpochs: 200
+---
+
+Logistic regression is the simplest model that still teaches almost everything:
+a linear boundary, a nonlinear squashing function, and gradient descent.
+
+## The model
+
+It predicts the probability of the positive class by passing a linear score
+through the sigmoid:
+
+$$
+p = \sigma(\mathbf{w}\cdot\mathbf{x} + b), \qquad \sigma(z) = \frac{1}{1 + e^{-z}}
+$$
+
+Training minimizes the binary cross-entropy loss $\mathcal{L} = -\frac{1}{m}\sum_{i=1}^{m}\big[y_i \log p_i + (1-y_i)\log(1-p_i)\big]$ by gradient descent.
+
+## Train it yourself
+
+The playground below trains a logistic regression model **entirely in your
+browser** on a synthetic two-class dataset. Adjust the learning rate and epochs,
+hit train, and watch the decision boundary converge.
+
+<Playground kind="logistic-regression" />
+
+## What to notice
+
+- A **too-high** learning rate makes the loss bounce or diverge.
+- A **too-low** rate converges slowly — many epochs for little progress.
+- The boundary is always a straight line: logistic regression is linear in
+  feature space. Curved boundaries require feature engineering or a nonlinear
+  model.
+
+This same training loop — forward pass, loss, gradient, update — is the kernel
+inside every deep network.

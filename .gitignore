@@ -1,0 +1,26 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# next
+/.next/
+/out/
+next-env.d.ts
+
+# generated content indexes
+/src/lib/content/generated/
+/public/search-index.json
+
+# misc
+.DS_Store
+*.pem
+.env*.local
+.vercel
+*.tsbuildinfo
+
+# local machine-specific Claude settings
+.claude/settings.local.json
+
+# local Claude Code tooling, not part of the site
+/.claude/
