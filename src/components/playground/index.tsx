@@ -22,6 +22,11 @@ const registry: Record<string, ComponentType<Record<string, unknown>>> = {
       import("./logistic-regression").then((m) => m.LogisticRegressionPlayground),
     { ssr: false, loading: () => loader },
   ) as ComponentType<Record<string, unknown>>,
+  "dataset-generator": dynamic(
+    () =>
+      import("./dataset-generator").then((m) => m.DatasetGeneratorPlayground),
+    { ssr: false, loading: () => loader },
+  ) as ComponentType<Record<string, unknown>>,
   // "decision-tree": dynamic(() => import("./decision-tree")...),
   // "neural-network": dynamic(() => import("./neural-network")...),
 };

@@ -1,0 +1,60 @@
+---
+title: "Synthetic Dataset Generator"
+description: "Generate regression and multi-class classification datasets on the fly — linear, polynomial, moons, spirals, checkerboards — and export them as CSV."
+taxonomy:
+  category: machine-learning
+  subcategory: classical-ml
+tags: ["synthetic-data", "regression", "classification", "visualization", "interactive"]
+difficulty: beginner
+type: playground
+authorId: shvinn
+publishedAt: "2026-09-15"
+featured: false
+playground:
+  kind: dataset-generator
+  params:
+    defaultSamples: 180
+    defaultNoise: 0.25
+---
+
+Before you can train a model, you need data that actually tests it. A
+straight line only proves a linear model works on a straight line — it
+takes moons, spirals, and checkerboards to reveal where a linear
+boundary breaks down.
+
+## Two families of pattern
+
+**Regression** patterns generate a single continuous target from one
+input feature:
+
+- **Linear** — the textbook case, $y = ax + b$ plus noise.
+- **Polynomial** — a quadratic bowl that a linear fit will underfit.
+- **Sinusoidal** — a periodic signal that needs basis expansion.
+- **Exponential** — a growth curve, often easier after a log transform.
+
+**Classification** patterns generate 2D points labeled into two or more
+classes:
+
+- **Blobs** — well-separated Gaussian clusters, linearly separable.
+- **Moons** — two interleaving crescents; no straight line separates them.
+- **Circles** — concentric rings, needing a radial decision boundary.
+- **Spiral** — interleaved arms, the classic nonlinear stress test.
+- **Checkerboard** — alternating cells with no global linear trend at all.
+
+## Try it
+
+Switch between regression and classification, pick a pattern, and tune
+sample count, noise, and (for classification) the number of classes.
+Every dataset is generated from a seed, so hitting **Regenerate** gives
+you a fresh draw without losing reproducibility — and **CSV** exports
+exactly what's on screen.
+
+<Playground kind="dataset-generator" />
+
+## Why this matters
+
+Model quality claims are only as good as the data they're tested on. A
+classifier that looks perfect on blobs can fall apart on a spiral. Use
+this generator to build intuition for *which* geometric structure a
+given model family can and can't represent before you reach for real
+data.
