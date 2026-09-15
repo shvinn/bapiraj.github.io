@@ -145,10 +145,13 @@ function generateClassification(
       });
     }
   } else {
+    // Jitter position before computing the cell, so higher noise mislabels
+    // points near a boundary — the same "noise blurs the boundary" effect
+    // the other patterns get from jittering position.
     const grid = 4;
     for (let i = 0; i < n; i++) {
-      const x = rand();
-      const y = rand();
+      const x = Math.min(1, Math.max(0, rand() + gaussian(rand) * jitter * 0.5));
+      const y = Math.min(1, Math.max(0, rand() + gaussian(rand) * jitter * 0.5));
       const cell = Math.floor(x * grid) + Math.floor(y * grid);
       pts.push({ x, y, label: cell % classes });
     }
