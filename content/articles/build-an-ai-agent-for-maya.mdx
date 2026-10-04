@@ -38,7 +38,9 @@ This tutorial builds a Python AI agent from an explicit model loop, a limited se
 
 The starter accepts a request such as:
 
-> Find a refundable hotel for two people in Aira, for two nights starting 14 days from Maya time. Keep the hotel booking within 250 bucks.
+> Find a refundable hotel for two people in Aira, with check-in 14 days from now and check-out two days later. Keep the hotel booking within 250 bucks.
+
+The agent reads the current time through `world_get_time`, then calculates check-in 14 days later and check-out two days after that. In this environment, “now” means the current time returned by Maya.
 
 It has three separate responsibilities:
 
@@ -314,7 +316,7 @@ Run a read-only request first:
 
 ```bash title="agent terminal"
 .venv/bin/python agent.py --task \
-  "Read Maya time and find a refundable two-night hotel stay in Aira, starting 14 days from now. Do not book."
+  "Find a refundable hotel for two people in Aira, with check-in 14 days from now and check-out two days later. Do not book."
 ```
 
 Enable booking for a specific hotel experiment:
@@ -325,7 +327,7 @@ Enable booking for a specific hotel experiment:
   --guest-name "Alex Learner" \
   --contact-email "maya-learner@example.invalid" \
   --journal hotel-reservation.json \
-  --task "Book the cheapest refundable hotel for two people in Aira, for two nights starting 14 days from Maya time, within the hotel budget. If none fits, do not book."
+  --task "Book the cheapest refundable hotel for two people in Aira, for two nights starting 14 days from now, within the hotel budget. If none fits, do not book."
 ```
 
 Run the live integration check against your disposable Maya world:
