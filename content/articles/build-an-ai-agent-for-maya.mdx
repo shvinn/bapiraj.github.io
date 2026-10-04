@@ -1,0 +1,388 @@
+---
+title: "Build an AI Agent for Maya: From MCP Tools to Reliable Bookings"
+description: "Build a Python AI agent with a model-driven loop, guarded tools, and recovery, then connect it to Maya to run and deploy it. Includes a downloadable starter and deployment guidance."
+taxonomy:
+  category: artificial-intelligence
+  subcategory: agents
+tags: ["agents", "maya", "mcp", "python", "tool-calling", "deployment"]
+difficulty: intermediate
+type: tutorial
+authorId: shvinn
+publishedAt: "2026-10-03"
+featured: true
+repoUrl: "https://github.com/shvinn/maya"
+related: ["what-is-mcp", "build-an-mcp-server", "prompting-foundations"]
+citations:
+  - title: "Maya: source, setup, and domain documentation"
+    authors: "shvinn"
+    year: 2026
+    url: "https://github.com/shvinn/maya"
+    venue: "GitHub"
+  - title: "The Client — MCP Python SDK"
+    authors: "Model Context Protocol"
+    url: "https://py.sdk.modelcontextprotocol.io/client/"
+    venue: "MCP documentation"
+  - title: "Function calling"
+    authors: "OpenAI"
+    url: "https://developers.openai.com/api/docs/guides/function-calling"
+    venue: "OpenAI documentation"
+---
+
+A useful agent must do more than describe a plan. It needs to discover real options, act within a budget, remember what it has already done, and recover when the world changes between a search and a booking.
+
+This tutorial builds a Python AI agent from an explicit model loop, a limited set of tools, a booking policy, and a durable action journal. You will set up and test the agent first, then connect it to Maya, a simulated tool environment, to try a hotel-booking task.
+
+> **Get the working starter:** [Download the Python example](/examples/maya-agent/maya-agent.zip), or [browse its source](https://github.com/shvinn/bapiraj.github.io/tree/main/public/examples/maya-agent). It includes the agent, dependencies, policy tests, a live MCP check, and setup notes. The starter uses MCP Python SDK 2.2.0.
+
+## What you will build
+
+The starter accepts a request such as:
+
+> My partner and I are going to Aira the weekend after next. Find us a refundable hotel for Friday and Saturday night, under 250 bucks total.
+
+The agent turns this request into a party of two, Friday check-in, Sunday check-out, a refundable room, and a total budget of 250 bucks. It reads the current date through `world_get_time` to work out which dates “the weekend after next” refers to, and shows those dates with its results. If the intended weekend is unclear, it should ask before booking.
+
+It has three separate responsibilities:
+
+| Component | Responsibility |
+|---|---|
+| Language model | Interpret the request and propose the next tool call |
+| Python agent host | Route tools, enforce booking policy, record actions, and return observations |
+| Maya | Maintain the world, compute prices and availability, and confirm or reject actions |
+
+The model does not own the budget check. The host does not invent availability. Maya does not choose the user's itinerary.
+
+```mermaid
+flowchart LR
+    U[User request] --> H[Python agent host]
+    H -->|Context and tool definitions| L[Language model]
+    L -->|Proposed tool call| H
+    H --> P[Policy check]
+    P -->|Allowed MCP call| M[Maya domain servers]
+    M -->|Observation or confirmation| H
+    H --> J[Local journal]
+```
+
+**Deploying an agent for Maya means running your agent alongside Maya and connecting it over MCP.** Maya does not provide an agent-upload API or execute your agent code. You can run both processes on your laptop, connect to a Docker-hosted Maya server, or place them on a private server.
+
+## Prerequisites
+
+You need Python 3.10 or newer, Git, and [uv](https://docs.astral.sh/uv/getting-started/installation/). The model-driven example also needs an OpenAI API key and a model with function calling available to your account. Model API calls incur provider charges; Maya's bookings use fictional currency and do not charge real money.
+
+You can run the connection check, policy tests, and live MCP integration check without a model API key. If MCP is new to you, read [What Is the Model Context Protocol?](/article/what-is-mcp) first.
+
+Commands below use a macOS or Linux shell. On Windows, use the equivalent PowerShell commands and replace `.venv/bin/python` with `.venv\Scripts\python.exe`.
+
+## Step 1: Set up your agent project
+
+Download and extract the starter linked above. Open a terminal in the extracted `maya-agent` folder and create an environment for your agent:
+
+```bash title="agent terminal"
+uv venv .venv
+uv pip install --python .venv/bin/python -r requirements.txt
+```
+
+The project has five small files:
+
+| File | Purpose |
+|---|---|
+| `agent.py` | Model loop, tool adapter, policy gate, and journal |
+| `requirements.txt` | Pinned Python dependencies |
+| `test_agent.py` | Key-free policy and model-loop tests |
+| `smoke_test.py` | Live integration check, used after starting Maya |
+| `README.md` | Commands and implementation limits |
+
+Set the credentials the model loop will use:
+
+```bash
+export OPENAI_API_KEY="your-api-key"
+export OPENAI_MODEL="your-function-calling-model"
+```
+
+Choose a function-calling model available to your account. You do not need to start Maya yet: first understand the agent's execution path and verify its local policy tests.
+
+## Step 2: Build the model-driven loop
+
+The host sends the task and tool definitions to the model. It executes each returned function call, sends the result back, and repeats until the model produces an answer or reaches the turn limit. [OpenAI's function-calling documentation](https://developers.openai.com/api/docs/guides/function-calling) explains this request/result exchange.
+
+The important part of the implementation is:
+
+```python title="agent.py — inside the bounded loop"
+response = await client.responses.create(
+    model=model,
+    instructions=INSTRUCTIONS,
+    input=history,
+    tools=host.functions(),
+    parallel_tool_calls=False,
+    store=False,
+)
+
+history.extend(response.output)
+requests = [item for item in response.output
+            if item.type == "function_call"]
+
+for request in requests:
+    arguments = json.loads(request.arguments)
+    result = await host.dispatch(request.name, arguments)
+    history.append({
+        "type": "function_call_output",
+        "call_id": request.call_id,
+        "output": json.dumps(result),
+    })
+```
+
+Preserve the full response output, including reasoning items, when carrying conversation state forward. The complete starter also handles invalid JSON, closes the model client, and stops after 20 model turns. Sequential tool execution makes the first version easier to reason about.
+
+The model API runs remotely, but **your Python host makes the localhost MCP connection**. You are not asking a hosted model service to reach `127.0.0.1` on your computer.
+## Step 3: Give the agent a limited tool surface
+
+Maya exposes reset and booking tools as well as searches. Your host should decide which capabilities the agent receives.
+
+The starter uses an explicit read-tool allowlist. It exposes searches and catalog lookups across all five domains, but omits every reset tool, clock mutation, and direct booking function.
+
+A discovered MCP tool is translated into a model function definition:
+
+```python title="agent.py — tool discovery"
+if tool.name in READ_TOOLS:
+    functions[tool.name] = {
+        "type": "function",
+        "name": tool.name,
+        "description": tool.description or tool.name,
+        "parameters": tool.input_schema,
+        "strict": False,
+    }
+```
+
+This fragment illustrates the mapping; the downloadable implementation stores the definitions in `MayaClient.tools` and their domain routes in `MayaClient.routes`.
+
+The discovered schemas contain optional arguments with defaults. The starter preserves them and explicitly disables strict schema normalization for these read functions. Its custom `reserve_hotel` function uses a small strict schema instead.
+
+The host checks the allowlist again at dispatch time. Hiding a tool from the model is useful, but a crafted or mistaken tool call must still be rejected by the executor.
+## Step 4: Enforce booking policy in Python
+
+A prompt can ask the model to respect a budget. It cannot guarantee that every booking request will respect it. Put the rule at the boundary where a proposal becomes a write.
+
+The starter's model-facing write capability is `reserve_hotel`, not Maya's unrestricted `hotels_book_room`. It accepts a room identifier and dates. The host supplies the guest name, party size, and contact identity from command-line authorization.
+
+Before booking, the host checks:
+
+- Booking mode was explicitly enabled.
+- The requested room still appears in a fresh availability search.
+- The room is refundable, with check-in at least two calendar days ahead.
+- The stay is 1–14 nights and within Maya's booking horizon.
+- Existing confirmed hotel bookings plus this quote fit the hotel budget.
+
+The budget check happens before the write:
+
+```python title="agent.py — hotel budget gate"
+spent = sum(
+    op["result"]["total_price"]["amount"]
+    for op in journal["operations"].values()
+    if op["state"] == "CONFIRMED"
+)
+
+if spent + quote["total_price"]["amount"] > budget:
+    return {"error": {
+        "code": "budget_exceeded",
+        "message": "Quoted total exceeds the remaining hotel budget.",
+    }}
+```
+
+Search and booking are separate calls, so another buyer can still change availability or price. The host checks the confirmation total too. If it exceeds the budget, it attempts to cancel the refundable booking and records the result. This is compensation after a price change, not an atomic price guarantee.
+
+The 250-buck allowance covers **hotel bookings only**, not a whole holiday. Flights, cars, food, and events remain read-only in this starter. An agent should say that clearly rather than present unbooked parts of a plan as confirmed.
+
+A booking is one room. Validate party size against the selected room's capacity; a larger group needs several rooms and an aggregate budget.
+## Step 5: Handle results and uncertain writes
+
+An MCP call can succeed at the protocol level while the requested action fails in the simulation.
+
+For example, a hotel may return:
+
+```json title="A business-rule failure"
+{
+  "error": {
+    "code": "sold_out",
+    "message": "The requested room is no longer available.",
+    "hint": "Search again for another room type or hotel."
+  }
+}
+```
+
+This is an illustrative envelope; the exact message names the hotel, room, and night. Inspect `error.code` in the returned payload as well as the SDK's `is_error` flag. Returning the observation to the model lets it search for an alternative instead of announcing a fictional success.
+
+Also decode all text content blocks. With the tested SDK, some list responses appear as one JSON object per block; reading `content[0]` alone silently discards the rest:
+
+```python title="agent.py — result decoding"
+values = [json.loads(block.text)
+          for block in result.content if block.type == "text"]
+value = values[0] if len(values) == 1 else values
+```
+
+The downloadable implementation additionally tolerates plain-text replies. Read a booking back by its actual reference when reporting confirmation. Different domains use different identifiers:
+
+| Domain | Confirmation field |
+|---|---|
+| Flights, hotels, events | `booking_reference` |
+| Cars | `rental_reference` |
+| Delivery | `order_id` |
+
+Match options by stable identifiers, not array position. Price-sorted flight results can reorder after a booking changes their fares.
+### Record intent before writing
+
+A lost response creates an awkward question: did the server reject the booking, or did it confirm the booking before the connection failed?
+
+Blindly repeating a write can reserve a second room. The starter uses a local journal with this lifecycle:
+
+```text
+Intent recorded as PENDING
+    → booking request sent
+    → confirmation recorded as CONFIRMED
+```
+
+It records intent **before** calling Maya. An exact request already marked `CONFIRMED` returns its stored receipt instead of issuing another booking.
+
+If a later run finds a `PENDING` reservation, it lists Maya bookings for the experiment's contact email and matches the room, dates, guest name, and party size. One match recovers the confirmation. Zero or multiple matches stop execution for inspection; the starter does not automatically retry an uncertain write.
+
+Keep the same journal when retrying the same experiment, and use a distinct dummy contact for a new experiment. The journal is bound to the Maya URL, identity, party, and budget. Do not delete a pending journal just to make an error disappear.
+
+This is duplicate prevention for a single writer, not universal exactly-once execution. Multiple agent processes, external cancellations, and database resets need additional coordination and reconciliation.
+## Step 6: Test the agent before connecting it
+
+Run the starter's local tests:
+
+```bash title="agent terminal"
+.venv/bin/python -m unittest -v test_agent.py
+```
+
+These tests use fake service responses and a mocked model exchange, so they need neither Maya nor API credentials. They check unauthorized writes, budget rejection, refundable-only policy, duplicate prevention, recovery of pending operations, and the tool-result round trip. This gives you a fast feedback loop while changing the agent.
+
+## Step 7: Start Maya as the agent's tool environment
+
+[Maya](https://github.com/shvinn/maya) provides simulated services your agent can search and book through MCP. Run it separately from your agent, in a second terminal.
+
+
+Clone the latest Maya from `main` and install its locked dependencies:
+
+```bash title="Maya terminal"
+git clone https://github.com/shvinn/maya.git
+cd maya
+uv sync --frozen
+mkdir -p state
+```
+
+Start all domains, keeping the database in an explicit location:
+
+```bash title="Maya terminal"
+MAYA_DB_PATH="$(pwd)/state/maya.db" \
+  uv run maya serve --domain all --host 127.0.0.1 --port 6292
+```
+
+Keep this terminal running. Your host connects to domain paths such as `/hotels/mcp` on `http://127.0.0.1:6292`; the starter discovers and routes the tools for you.
+
+Maya's clock uses **Mayan Meridian Time (MYT), fixed UTC−08:00**, with no daylight saving. Its SQLite database preserves bookings and clock state across restarts. Restarting the process does not create an empty world.
+
+Use a separate database for each experiment. Give the agent access to domain tools and the read-only `world_get_time` tool that appears on each domain server. Keep clock controls and reset tools in your test harness.
+## Step 8: Connect and run your agent
+
+Return to your agent terminal and check the connection:
+
+```bash
+.venv/bin/python agent.py --smoke
+```
+
+This discovers the allowed read tools and prints Maya time without calling the model or making a booking. If it cannot connect, check that Maya is running on port 6292.
+
+The key MCP lifecycle is small:
+
+```python title="Connecting to one domain"
+from mcp import ClientSession
+from mcp.client.streamable_http import streamable_http_client
+
+async with streamable_http_client(
+    "http://127.0.0.1:6292/hotels/mcp"
+) as (read, write, *_):
+    async with ClientSession(read, write) as session:
+        await session.initialize()
+        tools = await session.list_tools()
+        for tool in tools.tools:
+            print(tool.name, tool.input_schema)
+```
+
+Initialize the session before listing or calling tools. Discover the contract rather than guessing a function's arguments. The [official MCP Python client documentation](https://py.sdk.modelcontextprotocol.io/client/) describes the client lifecycle and result types.
+
+MCP transports and SDK names evolve. The starter pins SDK 2.2.0 and uses its snake-case fields, including `input_schema` and `is_error`; older examples may show `inputSchema` and `isError`. Keep server and client dependencies explicit when reproducing an example.
+Run a read-only request first:
+
+```bash title="agent terminal"
+.venv/bin/python agent.py --task \
+  "My partner and I are going to Aira the weekend after next. Find us a refundable hotel for Friday and Saturday night, under 250 bucks total. Show me the options before booking."
+```
+
+Enable booking for a specific hotel experiment:
+
+```bash title="agent terminal"
+.venv/bin/python agent.py \
+  --allow-bookings --budget 250 --guests 2 \
+  --guest-name "Alex Learner" \
+  --contact-email "maya-learner@example.invalid" \
+  --journal hotel-reservation.json \
+  --task "My partner and I are going to Aira the weekend after next. Book us the cheapest refundable hotel for Friday and Saturday night, under 250 bucks total. If nothing fits, let me know."
+```
+
+Run the live integration check against your disposable Maya world:
+
+```bash
+.venv/bin/python smoke_test.py
+```
+
+It uses a unique dummy contact, verifies budget rejection, makes a refundable booking, checks duplicate prevention and pending-response recovery, then cancels its booking. It does not reset shared inventory.
+
+**Verification scope:** the local tests and live MCP checks passed against Maya revision `c85e0ee13bd55fcec2551a011590669db2cd4190`. This records the version tested; setup uses the latest `main`. The model loop was checked with mocked responses, including real SDK serialization. A paid live-model run was not performed while preparing this article.
+
+## Step 9: Deploy your agent
+
+### Local processes
+
+The two-terminal setup is already a deployment: Maya owns the simulation state; your Python process owns the agent loop and journal. Override the address when needed:
+
+```bash
+.venv/bin/python agent.py \
+  --maya-url http://127.0.0.1:6292 \
+  --journal ./state/hotel-agent.json \
+  --task "Find a refundable hotel in Aira. Do not book."
+```
+
+This CLI runs once and exits. It does not schedule a later meal or keep monitoring a booking. To build a long-running concierge, add a worker that resumes saved tasks, reads Maya time, and executes due actions. Persist both the worker's journal and Maya's database.
+
+### Docker-hosted Maya
+
+The project's documented image exposes all domain endpoints:
+
+```bash
+# Documented deployment option; Docker was not exercised for this tutorial.
+docker run --rm \
+  -p 127.0.0.1:6292:6292 \
+  -v maya-data:/data \
+  ghcr.io/shvinn/maya
+```
+
+Run the Python agent on the host and keep the same localhost URL. If you later containerize the agent too, `localhost` inside its container refers to that container, not Maya. Put both containers on the same private network and use Maya's service name as the hostname. Account for Maya's allowed-host/DNS-rebinding configuration; the repository's Docker smoke script tests its expected container hostname.
+
+The image command follows the project's deployment documentation. The published image and the latest source checkout may have different release dates.
+
+### A private server
+
+Run Maya and the agent as separate supervised processes, or as services on a private container network. Keep credentials in the agent process, mount persistent storage, and restart interrupted jobs through reconciliation.
+
+Maya has no application authentication. Keep its endpoint on loopback or a private network; put an authenticated gateway in front of it if remote access is necessary. A shared database is a shared world, so one agent's bookings affect the next agent's searches.
+
+## Extend the starter into your own agent
+
+Once the hotel workflow is reliable, choose one additional capability and add its policy gate.
+
+For each new tool, define its input contract, authorization, spending limit, and recovery strategy. Add tests for successful execution, business-rule rejection, and an uncertain response before exposing it to the model.
+
+For a complete concierge, use a typed brief containing dates, travelers, budget, dietary requirements, and flexibility preferences. Let the model interpret the request and explain tradeoffs, while deterministic code checks time conflicts and spending. Record each commitment, verify it, and cancel reversible commitments if a later required booking fails. Maya offers no atomic transaction spanning all domains, so partial success must remain visible.
+
+A useful next exercise is to give your agent the same request twice: first in an empty world, then after another client buys its chosen room. Inspect the receipts and ask whether the agent still met the original requirements. That is where a tool-using assistant starts becoming a dependable agent.

@@ -41,6 +41,7 @@ export const learningPaths: LearningPath[] = [
     icon: "sparkles",
     steps: [
       { title: "The MCP Series", seriesSlug: "mcp-series" },
+      { title: "Build an AI Agent for Maya", articleSlug: "build-an-ai-agent-for-maya" },
       { title: "Agent Architectures", description: "Planning, reflection, and multi-agent orchestration." },
     ],
   },

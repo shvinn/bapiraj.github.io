@@ -18,6 +18,8 @@ export function formatDate(iso: string): string {
     year: "numeric",
     month: "short",
     day: "numeric",
+    // Article dates represent calendar days, independent of the reader's timezone.
+    ...(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? { timeZone: "UTC" } : {}),
   });
 }
 
