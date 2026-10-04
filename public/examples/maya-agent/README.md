@@ -18,7 +18,7 @@ On Windows, substitute `.venv\Scripts\python.exe` for `.venv/bin/python`.
 For a model-driven run, set `OPENAI_API_KEY` and `OPENAI_MODEL` to a function-calling model available to your account. API usage is billed by your provider. Never place a real API key in these files or your Git repository.
 
 ```sh
-.venv/bin/python agent.py --task "Find a refundable hotel for two people in Aira, with check-in 14 days from now and check-out two days later. Do not book."
+.venv/bin/python agent.py --task "Find a refundable hotel for two people in Aira, for a two-night stay on the weekend nearest to two weeks from now. Do not book."
 ```
 
 To permit hotel booking:
@@ -29,7 +29,7 @@ To permit hotel booking:
   --guest-name "Alex Learner" \
   --contact-email "maya-learner@example.invalid" \
   --journal hotel-reservation.json \
-  --task "Book the cheapest refundable hotel for two people in Aira, for two nights starting 14 days from now, within the hotel budget. If none fits, do not book."
+  --task "Book the cheapest refundable hotel for two people in Aira, for a two-night stay on the weekend nearest to two weeks from now, within the hotel budget. If none fits, do not book."
 ```
 
 A journal belongs to one Maya URL, contact identity, party and hotel budget. Keep it for retries. Use a dedicated dummy contact per experiment. A PENDING reservation is reconciled with Maya before any further write; zero or ambiguous matches stop for inspection. Do not delete a pending journal to force a retry.
