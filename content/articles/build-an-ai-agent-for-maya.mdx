@@ -16,7 +16,7 @@ citations:
   - title: "Maya: source, setup, and domain documentation"
     authors: "shvinn"
     year: 2026
-    url: "https://github.com/shvinn/maya/tree/c85e0ee13bd55fcec2551a011590669db2cd4190"
+    url: "https://github.com/shvinn/maya"
     venue: "GitHub"
   - title: "The Client — MCP Python SDK"
     authors: "Model Context Protocol"
@@ -34,7 +34,7 @@ A useful agent must do more than describe a plan. It needs to discover real opti
 
 This tutorial builds a small Python agent that reads across those services and can reserve a hotel through a guarded booking function. The goal is a foundation you can understand and extend, rather than a large framework that hides the agent loop.
 
-> **Get the working starter:** [Download the Python example](/examples/maya-agent/maya-agent.zip), or [browse its source](https://github.com/shvinn/bapiraj.github.io/tree/main/public/examples/maya-agent). It includes the agent, dependencies, policy tests, a live MCP check, and setup notes. The examples target Maya revision `c85e0ee13bd55fcec2551a011590669db2cd4190` and MCP Python SDK 2.2.0.
+> **Get the working starter:** [Download the Python example](/examples/maya-agent/maya-agent.zip), or [browse its source](https://github.com/shvinn/bapiraj.github.io/tree/main/public/examples/maya-agent). It includes the agent, dependencies, policy tests, a live MCP check, and setup notes. The starter uses MCP Python SDK 2.2.0.
 
 ## What you will build
 
@@ -75,12 +75,11 @@ Commands below use a macOS or Linux shell. On Windows, use the equivalent PowerS
 
 ## Step 1: Start an isolated Maya world
 
-Clone Maya and install its locked dependencies:
+Clone the latest Maya from `main` and install its locked dependencies:
 
 ```bash title="terminal 1"
 git clone https://github.com/shvinn/maya.git
 cd maya
-git checkout c85e0ee13bd55fcec2551a011590669db2cd4190
 uv sync --frozen
 mkdir -p state
 ```
@@ -346,7 +345,7 @@ For more demanding agents, make a small scenario suite:
 
 Maya's clock controls help you test deadlines without waiting hours. Use a separate harness to freeze or advance time. Do not give those controls to the agent being tested: skipping past a deadline would change the task rather than solve it.
 
-**Verification scope:** the starter's policy tests and live MCP checks were run against the pinned Maya revision. The Responses loop was checked with a mocked model response sequence. A paid live-model run was not performed while preparing this article; you need your own credentials and model access for that part.
+**Verification scope:** the starter's policy tests and live MCP checks were run against Maya revision `c85e0ee13bd55fcec2551a011590669db2cd4190`. This records the version tested; the setup above uses the latest `main`. The Responses loop was checked with a mocked model response sequence. A paid live-model run was not performed while preparing this article; you need your own credentials and model access for that part.
 
 ## Step 9: Run the agent alongside Maya
 
@@ -377,7 +376,7 @@ docker run --rm \
 
 Run the Python agent on the host and keep the same localhost URL. If you later containerize the agent too, `localhost` inside its container refers to that container, not Maya. Put both containers on the same private network and use Maya's service name as the hostname. Account for Maya's allowed-host/DNS-rebinding configuration; the repository's Docker smoke script tests its expected container hostname.
 
-The image command follows the project's deployment documentation and does not pin the source revision used by this tutorial. Build your own image from the pinned checkout when you need that exact code.
+The image command follows the project's deployment documentation. The published image and the latest source checkout may have different release dates.
 
 ### A private server
 

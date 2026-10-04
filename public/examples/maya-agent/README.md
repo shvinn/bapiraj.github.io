@@ -4,7 +4,7 @@ The accompanying article walks through this starter. Maya runs separately and ex
 
 ## Setup
 
-Use Python 3.10+ and uv. Start the pinned Maya revision described in the article, then:
+Use Python 3.10+ and uv. Start Maya from the latest `main` as described in the article, then:
 
 ```sh
 uv venv .venv
