@@ -38,9 +38,9 @@ This tutorial builds a Python AI agent from an explicit model loop, a limited se
 
 The starter accepts a request such as:
 
-> Find a refundable hotel for two people in Aira, for a two-night stay on the weekend nearest to two weeks from now. Keep the hotel booking within 250 bucks.
+> My partner and I are going to Aira the weekend after next. Find us a refundable hotel for Friday and Saturday night, under 250 bucks total.
 
-The agent reads the current time through `world_get_time`, finds the weekend nearest to the date two weeks ahead, and searches for a two-night stay. For this example, it uses Friday check-in and Sunday check-out, choosing the Friday closest to that target date and stating the chosen dates in its answer. In this environment, “now” means the current time returned by Maya.
+The agent turns this request into a party of two, Friday check-in, Sunday check-out, a refundable room, and a total budget of 250 bucks. It reads the current date through `world_get_time` to work out which dates “the weekend after next” refers to, and shows those dates with its results. If the intended weekend is unclear, it should ask before booking.
 
 It has three separate responsibilities:
 
@@ -316,7 +316,7 @@ Run a read-only request first:
 
 ```bash title="agent terminal"
 .venv/bin/python agent.py --task \
-  "Find a refundable hotel for two people in Aira, for a two-night stay on the weekend nearest to two weeks from now. Do not book."
+  "My partner and I are going to Aira the weekend after next. Find us a refundable hotel for Friday and Saturday night, under 250 bucks total. Show me the options before booking."
 ```
 
 Enable booking for a specific hotel experiment:
@@ -327,7 +327,7 @@ Enable booking for a specific hotel experiment:
   --guest-name "Alex Learner" \
   --contact-email "maya-learner@example.invalid" \
   --journal hotel-reservation.json \
-  --task "Book the cheapest refundable hotel for two people in Aira, for a two-night stay on the weekend nearest to two weeks from now, within the hotel budget. If none fits, do not book."
+  --task "My partner and I are going to Aira the weekend after next. Book us the cheapest refundable hotel for Friday and Saturday night, under 250 bucks total. If nothing fits, let me know."
 ```
 
 Run the live integration check against your disposable Maya world:
